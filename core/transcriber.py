@@ -1,4 +1,4 @@
-from faster_whisper import WhisperModel
+import whisper
 import os
 import requests
 from pydub import AudioSegment
@@ -8,13 +8,7 @@ from pydub import AudioSegment
 SARVAM_PIECE_SECONDS = 25
 
 
-# faster-whisper model sizes: tiny, base, small, medium, large-v2, large-v3
-# "base" is a good speed/accuracy tradeoff on CPU; override via env var if needed.
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
-
-# CPU-only compute type. int8 is fastest with a small accuracy tradeoff vs float32.
-WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
-WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 
 
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
@@ -26,22 +20,21 @@ _model = None
 
 def load_model():
 
-    global _model
+    global _model  
 
-    if _model is None:
-        print(f"Loading faster-whisper model: {WHISPER_MODEL} (device={WHISPER_DEVICE}, compute_type={WHISPER_COMPUTE_TYPE}) ...")
-        _model = WhisperModel(WHISPER_MODEL, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE_TYPE)
+    if _model is None: 
+        print(f"Loading Whisper model: {WHISPER_MODEL} ...")
+        _model = whisper.load_model(WHISPER_MODEL) 
         print("Whisper model loaded.")
-    return _model
+    return _model 
 
 
 def transcribe_chunk_whisper(chunk_path: str) -> str:
 
-    model = load_model()
+    model = load_model()  
 
-    # faster-whisper returns (segments_generator, info) rather than a dict.
-    segments, _info = model.transcribe(chunk_path, task="transcribe")
-    return "".join(segment.text for segment in segments).strip()
+    result = model.transcribe(chunk_path, task="transcribe")  
+    return result["text"]  
 
 
 def _send_to_sarvam(piece_path: str) -> str:
@@ -60,7 +53,7 @@ def _send_to_sarvam(piece_path: str) -> str:
         )
 
     if not response.ok:
-        print(f"\n Sarvam returned {response.status_code}")
+        print(f"\n❌ Sarvam returned {response.status_code}")
         print(f"Response body: {response.text}\n")
         response.raise_for_status()
 
@@ -127,4 +120,4 @@ def transcribe_all(chunks: list, language: str = "english") -> str:
 
     print("Transcription complete.")
 
-    return full_transcript.strip()
+    return full_transcript.strip()  
