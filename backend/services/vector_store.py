@@ -1,11 +1,10 @@
-import os
 from langchain_chroma import Chroma
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
-CHROMA_DIR = "vector_db"
-COLLECTION_NAME = "meeting-transcript"
+from backend.config import CHROMA_DIR
+
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
 _embeddings = None
@@ -21,19 +20,29 @@ def get_embeddings():
     return _embeddings
 
 
-def build_vector_store(transcript: str) -> Chroma:
-    print("Building vector store")
+def _collection_name(session_id: str) -> str:
+    # Namespaced per session so concurrent API requests don't overwrite
+    # each other's transcript embeddings (the original single-user script
+    # used one fixed collection name — that no longer works once this runs
+    # behind a multi-request FastAPI server).
+    return f"meeting-transcript-{session_id}"
 
-    # ── Clear any existing collection so old video chunks don't pollute results ──
+
+def build_vector_store(transcript: str, session_id: str) -> Chroma:
+    print(f"Building vector store for session {session_id}")
+
     embeddings = get_embeddings()
+    collection_name = _collection_name(session_id)
+
+    # Clear any pre-existing collection for this session id
     try:
         old = Chroma(
-            collection_name=COLLECTION_NAME,
+            collection_name=collection_name,
             embedding_function=embeddings,
             persist_directory=CHROMA_DIR,
         )
         old.delete_collection()
-        print("Cleared previous vector store collection")
+        print("Cleared previous vector store collection for this session")
     except Exception:
         pass  # Nothing to clear on first run
 
@@ -52,17 +61,17 @@ def build_vector_store(transcript: str) -> Chroma:
     vector_store = Chroma.from_documents(
         documents=docs,
         embedding=embeddings,
-        collection_name=COLLECTION_NAME,
+        collection_name=collection_name,
         persist_directory=CHROMA_DIR,
     )
 
     return vector_store
 
 
-def load_vector_store() -> Chroma:
+def load_vector_store(session_id: str) -> Chroma:
     embeddings = get_embeddings()
     return Chroma(
-        collection_name=COLLECTION_NAME,
+        collection_name=_collection_name(session_id),
         embedding_function=embeddings,
         persist_directory=CHROMA_DIR,
     )

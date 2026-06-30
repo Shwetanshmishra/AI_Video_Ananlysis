@@ -1,81 +1,121 @@
-# Environment variables
-.env
-.env.*
-
-# Python virtual environment
-videoagent/
-venv/
-.venv/
-
-# Python cache
+# ===========================
+# Python
+# ===========================
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Logs
-*.log
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+videoagent/
+studyaienv/
 
-# Downloads folder
-downloads/
-
-
-# Streamlit
-.streamlit/config.toml
-
-# IDE files
-.vscode/
-.idea/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Build files
-build/
-dist/
-*.egg-info/
-
-# Temporary files
-temp/
-tmp/
-# Environment variables
+# Environment Variables
 .env
 .env.*
+!.env.example
 
-# Python virtual environment
-videoagent/
-venv/
-.venv/
-
-# Python cache
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Logs
-*.log
-
-# Downloads folder
-downloads/
-
-
-# Streamlit
-.streamlit/config.toml
-
-# IDE files
+# IDE
 .vscode/
 .idea/
+*.swp
 
-# OS files
+# OS Files
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Build files
+# Python Build
 build/
 dist/
 *.egg-info/
+.eggs/
 
-# Temporary files
-temp/
-tmp/
+# Logs
+*.log
+logs/
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ===========================
+# Streamlit
+# ===========================
+.streamlit/secrets.toml
+
+# ===========================
+# AI Model Cache
+# ===========================
+models/
+cache/
+.huggingface/
+.hf_cache/
+transformers_cache/
+
+# ===========================
+# ChromaDB / Vector DB
+# ===========================
 vector_db/
+vectordb/
+chroma/
+chromadb/
+*.sqlite3
+
+# ===========================
+# Downloads & Generated Files
+# ===========================
+downloads/
+uploads/
+temp/
+tmp/
+output/
+outputs/
+generated/
+audio_chunks/
+transcripts/
+
+# Audio / Video
+*.wav
+*.mp3
+*.mp4
+*.mkv
+*.webm
+*.avi
+
+# Generated PDFs
+*.pdf
+
+# ===========================
+# FastAPI
+# ===========================
+backend/__pycache__/
+backend/.env
+
+# ===========================
+# Streamlit
+# ===========================
+frontend/.env
+
+# ===========================
+# Docker (optional)
+# ===========================
+docker-compose.override.yml
+
+# ===========================
+# Claude / AI Editor Files
+# ===========================
+.claude/
+.claude-code/
+.claude-cache/
+.cursor/
+.cursor-cache/

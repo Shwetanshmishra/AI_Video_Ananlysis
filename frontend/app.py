@@ -1,10 +1,66 @@
 import streamlit as st
 import time
 import os
-import tempfile
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# ── Backend connection ───────────────────────────────────────────────────────
+# The frontend never imports backend/* code directly. Every heavy operation
+# (download, transcription, summarization, extraction, RAG) happens inside
+# the FastAPI service; this Streamlit app only makes HTTP calls to it.
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
+REQUEST_TIMEOUT = int(os.getenv("BACKEND_TIMEOUT_SECONDS", "1800"))  # pipeline can take a while
+
+
+class BackendError(Exception):
+    """Raised when the FastAPI backend returns an error response."""
+    pass
+
+
+def _raise_for_backend_error(response: requests.Response):
+    if response.ok:
+        return
+    try:
+        detail = response.json().get("detail", response.text)
+    except Exception:
+        detail = response.text
+    raise BackendError(f"[{response.status_code}] {detail}")
+
+
+def api_analyze(youtube_url, uploaded_file, language: str) -> dict:
+    """Call POST /analyze with either a youtube_url or an uploaded file."""
+    data = {"language": language}
+    files = None
+    if youtube_url:
+        data["youtube_url"] = youtube_url
+    if uploaded_file is not None:
+        files = {"file": (uploaded_file.name, uploaded_file.getvalue())}
+
+    response = requests.post(
+        f"{BACKEND_URL}/analyze",
+        data=data,
+        files=files,
+        timeout=REQUEST_TIMEOUT,
+    )
+    _raise_for_backend_error(response)
+    return response.json()
+
+
+def api_chat(session_id: str, question: str) -> dict:
+    response = requests.post(
+        f"{BACKEND_URL}/chat",
+        json={"session_id": session_id, "question": question},
+        timeout=120,
+    )
+    _raise_for_backend_error(response)
+    return response.json()
+
+
+def api_clear_chat_history(session_id: str) -> None:
+    response = requests.delete(f"{BACKEND_URL}/chat/{session_id}/history", timeout=30)
+    _raise_for_backend_error(response)
 
 st.set_page_config(
     page_title="AI Video Assistant",
@@ -405,6 +461,7 @@ hr { border: none !important; border-top: 1px solid var(--border) !important; ma
 # ── Session State ──────────────────────────────────────────────────────────────
 for key, default in {
     "result": None,
+    "session_id": None,
     "chat_history": [],
     "processing": False,
     "pipeline_done": False,
@@ -447,18 +504,16 @@ with st.sidebar:
     input_mode = st.radio("Input mode", ["YouTube URL", "Upload file"], label_visibility="hidden")
 
     source = None
+    uploaded_file_obj = None
     if input_mode == "YouTube URL":
         url_val = st.text_input("YouTube URL", placeholder="https://youtube.com/watch?v=...", label_visibility="hidden")
         source = url_val.strip() if url_val else None
     else:
         uploaded = st.file_uploader("Upload video or audio", type=["mp4","mov","avi","mkv","webm","mp3","wav"], label_visibility="hidden")
         if uploaded:
-            suffix = os.path.splitext(uploaded.name)[1]
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-            tmp.write(uploaded.read())
-            tmp.flush()
-            source = tmp.name
-
+            uploaded_file_obj = uploaded
+            source = uploaded.name  # just used as a truthy "a source was provided" marker
+            st.success(f"✅ Ready to upload: {uploaded.name}")
     st.markdown("---")
     st.markdown('<span class="badge badge-cyan">Language</span>', unsafe_allow_html=True)
     language = st.selectbox("Language", ["english", "hinglish"], label_visibility="hidden")
@@ -484,14 +539,9 @@ if run_btn:
     if not source:
         st.error("Please enter a YouTube URL or upload a file.")
     else:
-        from utils.audio_processor import process_input
-        from core.transcriber import transcribe_all
-        from core.summarizer import summarize, generate_title
-        from core.extractor import extract_action_items, extract_key_decisions, extract_questions
-        from core.rag_engine import build_rag_chain
-
         st.session_state.pipeline_done = False
         st.session_state.result = None
+        st.session_state.session_id = None
         st.session_state.chat_history = []
         st.session_state.pipeline_steps = {k: "pending" for k, _, _ in PIPELINE_STEPS}
         for _k, _icon2, _lbl2 in PIPELINE_STEPS:
@@ -500,73 +550,58 @@ if run_btn:
         progress_ph = st.empty()
 
         try:
-            progress_ph.info("⚙️ Pipeline running — see sidebar for live status…")
+            progress_ph.info("⚙️ Pipeline running on backend — see sidebar for live status…")
 
-            st.session_state.pipeline_steps["audio"] = "active"
-            if "audio" in step_slots:
-                step_slots["audio"].markdown(_step_html("audio", "active"), unsafe_allow_html=True)
-            chunks = process_input(source)
-            st.session_state.pipeline_steps["audio"] = "done"
-            if "audio" in step_slots:
-                step_slots["audio"].markdown(_step_html("audio", "done"), unsafe_allow_html=True)
+            # The FastAPI backend runs the whole pipeline (audio -> transcript ->
+            # title -> summary -> extraction -> RAG indexing) in one request, so
+            # we can't get true per-step callbacks over plain HTTP. We still
+            # animate the same status bars: each step lights up "active" while
+            # we wait, then everything is marked "done" together once the
+            # backend's single JSON response comes back.
+            for _k, _icon2, _lbl2 in PIPELINE_STEPS:
+                st.session_state.pipeline_steps[_k] = "active"
+                if _k in step_slots:
+                    step_slots[_k].markdown(_step_html(_k, "active"), unsafe_allow_html=True)
 
-            st.session_state.pipeline_steps["transcript"] = "active"
-            if "transcript" in step_slots:
-                step_slots["transcript"].markdown(_step_html("transcript", "active"), unsafe_allow_html=True)
-            transcript = transcribe_all(chunks, language)
-            st.session_state.pipeline_steps["transcript"] = "done"
-            if "transcript" in step_slots:
-                step_slots["transcript"].markdown(_step_html("transcript", "done"), unsafe_allow_html=True)
+            youtube_url = source if input_mode == "YouTube URL" else None
+            file_to_send = uploaded_file_obj if input_mode == "Upload file" else None
 
-            st.session_state.pipeline_steps["title"] = "active"
-            if "title" in step_slots:
-                step_slots["title"].markdown(_step_html("title", "active"), unsafe_allow_html=True)
-            title = generate_title(transcript)
-            st.session_state.pipeline_steps["title"] = "done"
-            if "title" in step_slots:
-                step_slots["title"].markdown(_step_html("title", "done"), unsafe_allow_html=True)
+            data = api_analyze(youtube_url=youtube_url, uploaded_file=file_to_send, language=language)
 
-            st.session_state.pipeline_steps["summary"] = "active"
-            if "summary" in step_slots:
-                step_slots["summary"].markdown(_step_html("summary", "active"), unsafe_allow_html=True)
-            summary = summarize(transcript)
-            st.session_state.pipeline_steps["summary"] = "done"
-            if "summary" in step_slots:
-                step_slots["summary"].markdown(_step_html("summary", "done"), unsafe_allow_html=True)
-
-            st.session_state.pipeline_steps["extract"] = "active"
-            if "extract" in step_slots:
-                step_slots["extract"].markdown(_step_html("extract", "active"), unsafe_allow_html=True)
-            action_items = extract_action_items(transcript)
-            decisions    = extract_key_decisions(transcript)
-            questions    = extract_questions(transcript)
-            st.session_state.pipeline_steps["extract"] = "done"
-            if "extract" in step_slots:
-                step_slots["extract"].markdown(_step_html("extract", "done"), unsafe_allow_html=True)
-
-            st.session_state.pipeline_steps["rag"] = "active"
-            if "rag" in step_slots:
-                step_slots["rag"].markdown(_step_html("rag", "active"), unsafe_allow_html=True)
-            rag_chain = build_rag_chain(transcript)
-            st.session_state.pipeline_steps["rag"] = "done"
-            if "rag" in step_slots:
-                step_slots["rag"].markdown(_step_html("rag", "done"), unsafe_allow_html=True)
+            for _k, _icon2, _lbl2 in PIPELINE_STEPS:
+                st.session_state.pipeline_steps[_k] = "done"
+                if _k in step_slots:
+                    step_slots[_k].markdown(_step_html(_k, "done"), unsafe_allow_html=True)
 
             st.session_state.result = {
-                "title":        title,
-                "transcript":   transcript,
-                "summary":      summary,
-                "action_items": action_items,
-                "key_decisions":decisions,
-                "open_questions":questions,
-                "rag_chain":    rag_chain,
+                "title":         data["title"],
+                "transcript":    data["transcript"],
+                "summary":       data["summary"],
+                "action_items":  data["action_items"],
+                "key_decisions": data["key_decisions"],
+                "open_questions":data["open_questions"],
             }
+            st.session_state.session_id = data["session_id"]
             st.session_state.pipeline_done = True
             progress_ph.success("✅ Analysis complete!")
             time.sleep(0.8)
             progress_ph.empty()
             st.rerun()
 
+        except BackendError as e:
+            for k in ["audio","transcript","title","summary","extract","rag"]:
+                if st.session_state.pipeline_steps.get(k) == "active":
+                    st.session_state.pipeline_steps[k] = "pending"
+                    if k in step_slots:
+                        step_slots[k].markdown(_step_html(k, "pending"), unsafe_allow_html=True)
+            progress_ph.error(f"❌ Backend error: {e}")
+        except requests.exceptions.RequestException as e:
+            for k in ["audio","transcript","title","summary","extract","rag"]:
+                if st.session_state.pipeline_steps.get(k) == "active":
+                    st.session_state.pipeline_steps[k] = "pending"
+                    if k in step_slots:
+                        step_slots[k].markdown(_step_html(k, "pending"), unsafe_allow_html=True)
+            progress_ph.error(f"❌ Could not reach backend at {BACKEND_URL}: {e}")
         except Exception as e:
             for k in ["audio","transcript","title","summary","extract","rag"]:
                 if st.session_state.pipeline_steps.get(k) == "active":
@@ -651,15 +686,24 @@ if st.session_state.result:
         send_btn = st.button("Send →", use_container_width=True)
 
     if send_btn and user_input and user_input.strip():
-        from core.rag_engine import ask_question
         with st.spinner("Thinking…"):
-            answer = ask_question(r["rag_chain"], user_input.strip())
+            try:
+                data = api_chat(st.session_state.session_id, user_input.strip())
+                answer = data["answer"]
+            except BackendError as e:
+                answer = f"⚠️ Backend error: {e}"
+            except requests.exceptions.RequestException as e:
+                answer = f"⚠️ Could not reach backend at {BACKEND_URL}: {e}"
         st.session_state.chat_history.append({"role": "user",      "content": user_input.strip()})
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
         st.rerun()
 
     if st.session_state.chat_history:
         if st.button("🗑️ Clear Chat"):
+            try:
+                api_clear_chat_history(st.session_state.session_id)
+            except Exception:
+                pass  # local history is cleared regardless
             st.session_state.chat_history = []
             st.rerun()
 

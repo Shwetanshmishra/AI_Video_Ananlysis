@@ -1,42 +1,55 @@
-from faster_whisper import WhisperModel
+"""
+Transcription service — same Whisper / Sarvam logic as the original
+core/transcriber.py. The only change is that `st.cache_resource` (which only
+exists inside a Streamlit process) is replaced with a plain lazy-loaded
+singleton guarded by a lock, since this code now runs inside FastAPI.
+"""
+
 import os
+import threading
+
 import requests
 from pydub import AudioSegment
+from faster_whisper import WhisperModel
+
+from backend.config import (
+    SARVAM_API_KEY,
+    WHISPER_MODEL,
+    WHISPER_COMPUTE_TYPE,
+    WHISPER_DEVICE,
+)
 
 # Sarvam's sync STT-translate API rejects audio longer than 30s.
 # We slice each chunk into 25s pieces (with a 5s safety margin) before sending.
 SARVAM_PIECE_SECONDS = 25
 
-
-# faster-whisper model sizes: tiny, base, small, medium, large-v2, large-v3
-# "base" is a good speed/accuracy tradeoff on CPU; override via env var if needed.
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
-
-# CPU-only compute type. int8 is fastest with a small accuracy tradeoff vs float32.
-WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
-WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
-
-
-SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
 SARVAM_STT_TRANSLATE_URL = "https://api.sarvam.ai/speech-to-text-translate"
 SARVAM_MODEL = os.getenv("SARVAM_STT_MODEL", "saaras:v2.5")
 
 _model = None
+_model_lock = threading.Lock()
 
 
-def load_model():
-
+def load_model() -> WhisperModel:
+    """Lazily load (and cache) the faster-whisper model, thread-safe."""
     global _model
-
     if _model is None:
-        print(f"Loading faster-whisper model: {WHISPER_MODEL} (device={WHISPER_DEVICE}, compute_type={WHISPER_COMPUTE_TYPE}) ...")
-        _model = WhisperModel(WHISPER_MODEL, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE_TYPE)
-        print("Whisper model loaded.")
+        with _model_lock:
+            if _model is None:
+                print(
+                    f"Loading faster-whisper model: "
+                    f"{WHISPER_MODEL} "
+                    f"(device={WHISPER_DEVICE}, compute_type={WHISPER_COMPUTE_TYPE})"
+                )
+                _model = WhisperModel(
+                    WHISPER_MODEL,
+                    device=WHISPER_DEVICE,
+                    compute_type=WHISPER_COMPUTE_TYPE,
+                )
     return _model
 
 
 def transcribe_chunk_whisper(chunk_path: str) -> str:
-
     model = load_model()
 
     # faster-whisper returns (segments_generator, info) rather than a dict.
@@ -45,7 +58,7 @@ def transcribe_chunk_whisper(chunk_path: str) -> str:
 
 
 def _send_to_sarvam(piece_path: str) -> str:
-    """Send one ≤30s WAV file to Sarvam and return the English transcript."""
+    """Send one <=30s WAV file to Sarvam and return the English transcript."""
     headers = {"api-subscription-key": SARVAM_API_KEY}
 
     with open(piece_path, "rb") as f:
@@ -69,7 +82,7 @@ def _send_to_sarvam(piece_path: str) -> str:
 
 def transcribe_chunk_sarvam(chunk_path: str) -> str:
     """
-    Sarvam sync API only accepts ≤30s audio. We split this chunk into
+    Sarvam sync API only accepts <=30s audio. We split this chunk into
     25-second pieces, send each separately, and join the transcripts.
     """
     if not SARVAM_API_KEY:
@@ -87,7 +100,7 @@ def transcribe_chunk_sarvam(chunk_path: str) -> str:
         piece.export(piece_path, format="wav")
 
         try:
-            print(f"  → Sarvam piece {i + 1}/{total_pieces} ...")
+            print(f"  -> Sarvam piece {i + 1}/{total_pieces} ...")
             full_text += _send_to_sarvam(piece_path) + " "
         finally:
             if os.path.exists(piece_path):
@@ -95,15 +108,12 @@ def transcribe_chunk_sarvam(chunk_path: str) -> str:
 
     return full_text.strip()
 
-   
-
-
 
 def transcribe_chunk(chunk_path: str, language: str = "english") -> str:
     """
     Route one chunk to Whisper or Sarvam depending on language choice.
-    - english  → Whisper (local model)
-    - hinglish → Sarvam (translates to English while transcribing)
+    - english  -> Whisper (local model)
+    - hinglish -> Sarvam (translates to English while transcribing)
     """
     if language.lower() == "hinglish":
         return transcribe_chunk_sarvam(chunk_path)
@@ -111,20 +121,15 @@ def transcribe_chunk(chunk_path: str, language: str = "english") -> str:
 
 
 def transcribe_all(chunks: list, language: str = "english") -> str:
-
-    full_transcript = "" 
+    full_transcript = ""
 
     engine = "Sarvam AI" if language.lower() == "hinglish" else "Whisper"
     print(f"Using {engine} for transcription.")
 
-    for i, chunk in enumerate(chunks):  
-
+    for i, chunk in enumerate(chunks):
         print(f"Transcribing chunk {i + 1}/{len(chunks)}...")
-
-        text = transcribe_chunk(chunk, language=language)  
-
-        full_transcript += text + " "  
+        text = transcribe_chunk(chunk, language=language)
+        full_transcript += text + " "
 
     print("Transcription complete.")
-
     return full_transcript.strip()
