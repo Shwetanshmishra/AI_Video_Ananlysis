@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from backend.models.schemas import AnalyzeResponse
-from backend.utils.session_store import get_session, delete_session
+from models.schemas import AnalyzeResponse
+from utils.session_store import get_session, delete_session
 
 router = APIRouter(tags=["sessions"])
 

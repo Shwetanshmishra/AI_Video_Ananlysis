@@ -6,7 +6,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from backend.config import MISTRAL_API_KEY
+from config import MISTRAL_API_KEY
 
 
 def get_llm():

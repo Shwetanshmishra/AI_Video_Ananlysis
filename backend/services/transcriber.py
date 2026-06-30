@@ -12,7 +12,7 @@ import requests
 from pydub import AudioSegment
 from faster_whisper import WhisperModel
 
-from backend.config import (
+from config import (
     SARVAM_API_KEY,
     WHISPER_MODEL,
     WHISPER_COMPUTE_TYPE,

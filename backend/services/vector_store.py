@@ -3,7 +3,7 @@ from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
-from backend.config import CHROMA_DIR
+from config import CHROMA_DIR
 
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 

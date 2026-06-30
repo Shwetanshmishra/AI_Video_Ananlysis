@@ -2,9 +2,9 @@ import traceback
 
 from fastapi import APIRouter, HTTPException
 
-from backend.models.schemas import ChatRequest, ChatResponse, ChatHistoryResponse, ChatHistoryItem
-from backend.utils.session_store import get_session, update_session
-from backend.services.rag_engine import ask_question
+from models.schemas import ChatRequest, ChatResponse, ChatHistoryResponse, ChatHistoryItem
+from utils.session_store import get_session, update_session
+from services.rag_engine import ask_question
 
 router = APIRouter(tags=["chat"])
 

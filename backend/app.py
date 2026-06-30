@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.routers import analyze, chat, sessions
+from routers import analyze, chat, sessions
 
 app = FastAPI(
     title="AI Video Assistant API",

@@ -6,19 +6,19 @@ import traceback
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 
-from backend.config import UPLOAD_DIR
-from backend.models.schemas import AnalyzeResponse
-from backend.utils.session_store import create_session
+from config import UPLOAD_DIR
+from models.schemas import AnalyzeResponse
+from utils.session_store import create_session
 
-from backend.services.audio_processor import process_input
-from backend.services.transcriber import transcribe_all
-from backend.services.summarizer import summarize, generate_title
-from backend.services.extractor import (
+from services.audio_processor import process_input
+from services.transcriber import transcribe_all
+from services.summarizer import summarize, generate_title
+from services.extractor import (
     extract_action_items,
     extract_key_decisions,
     extract_questions,
 )
-from backend.services.rag_engine import build_rag_chain
+from services.rag_engine import build_rag_chain
 
 router = APIRouter(tags=["analyze"])
 

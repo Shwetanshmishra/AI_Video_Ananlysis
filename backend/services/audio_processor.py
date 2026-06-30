@@ -10,7 +10,7 @@ from pydub import AudioSegment
 import os
 import yt_dlp
 
-from backend.config import DOWNLOAD_DIR
+from config import DOWNLOAD_DIR
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 

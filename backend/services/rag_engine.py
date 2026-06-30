@@ -3,8 +3,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
-from backend.config import MISTRAL_API_KEY
-from backend.services.vector_store import build_vector_store, load_vector_store, get_retriever
+from config import MISTRAL_API_KEY
+from services.vector_store import build_vector_store, load_vector_store, get_retriever
 
 
 SYSTEM_PROMPT = """You are a helpful video assistant. Answer the user's question 
