@@ -56,7 +56,6 @@ htmlcov/
 # ===========================
 # AI Model Cache
 # ===========================
-models/
 cache/
 .huggingface/
 .hf_cache/
