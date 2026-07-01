@@ -507,6 +507,10 @@ with st.sidebar:
     uploaded_file_obj = None
     if input_mode == "YouTube URL":
         url_val = st.text_input("YouTube URL", placeholder="https://youtube.com/watch?v=...", label_visibility="hidden")
+        st.caption(
+            "⚠️ **Beta:** YouTube may block automated downloads on cloud servers. "
+            "If it fails, download the video and use Upload instead."
+        )
         source = url_val.strip() if url_val else None
     else:
         uploaded = st.file_uploader("Upload video or audio", type=["mp4","mov","avi","mkv","webm","mp3","wav"], label_visibility="hidden")

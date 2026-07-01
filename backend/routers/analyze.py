@@ -128,8 +128,18 @@ async def analyze(
     except HTTPException:
         raise
     except RuntimeError as e:
-        # Known failure modes raised by our own services (yt-dlp, Sarvam, etc.)
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        err = str(e)
+        # Give a user-friendly message for YouTube bot-detection blocks
+        if any(phrase in err for phrase in ["Sign in to confirm", "bot", "blocked all download"]):
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "YouTube blocked the download (anti-bot protection triggered on all "
+                    "available clients). Please download the video manually and upload "
+                    "the file instead — the upload path works 100% reliably."
+                ),
+            ) from e
+        raise HTTPException(status_code=502, detail=err) from e
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Pipeline failed: {e}") from e
