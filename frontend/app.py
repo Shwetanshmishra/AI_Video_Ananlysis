@@ -11,7 +11,6 @@ load_dotenv()
 # (download, transcription, summarization, extraction, RAG) happens inside
 # the FastAPI service; this Streamlit app only makes HTTP calls to it.
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
-REQUEST_TIMEOUT = int(os.getenv("BACKEND_TIMEOUT_SECONDS", "1800"))  # pipeline can take a while
 
 
 class BackendError(Exception):
@@ -29,8 +28,8 @@ def _raise_for_backend_error(response: requests.Response):
     raise BackendError(f"[{response.status_code}] {detail}")
 
 
-def api_analyze(youtube_url, uploaded_file, language: str) -> dict:
-    """Call POST /analyze with either a youtube_url or an uploaded file."""
+def api_submit(youtube_url, uploaded_file, language: str) -> str:
+    """POST /analyze — returns job_id immediately, pipeline runs in background."""
     data = {"language": language}
     files = None
     if youtube_url:
@@ -42,8 +41,22 @@ def api_analyze(youtube_url, uploaded_file, language: str) -> dict:
         f"{BACKEND_URL}/analyze",
         data=data,
         files=files,
-        timeout=REQUEST_TIMEOUT,
+        timeout=60,   # just submitting — should be near-instant
     )
+    _raise_for_backend_error(response)
+    return response.json()["job_id"]
+
+
+def api_poll_status(job_id: str) -> dict:
+    """GET /status/{job_id} — returns {state, step, error}."""
+    response = requests.get(f"{BACKEND_URL}/status/{job_id}", timeout=15)
+    _raise_for_backend_error(response)
+    return response.json()
+
+
+def api_get_session(job_id: str) -> dict:
+    """GET /session/{job_id} — fetch full results once state == done."""
+    response = requests.get(f"{BACKEND_URL}/session/{job_id}", timeout=30)
     _raise_for_backend_error(response)
     return response.json()
 
@@ -539,6 +552,18 @@ st.markdown('<div class="hero-sub">Transcribe · Summarise · Chat with your mee
 st.markdown("---")
 
 # ── Run Pipeline ──────────────────────────────────────────────────────────────
+
+# Step label → pipeline_steps key mapping (for live status updates via polling)
+_STEP_LABEL_MAP = {
+    "Downloading / converting audio": "audio",
+    "Transcribing audio":             "transcript",
+    "Generating title":               "title",
+    "Summarizing transcript":         "summary",
+    "Extracting insights":            "extract",
+    "Building RAG index":             "rag",
+    "Complete":                       "rag",
+}
+
 if run_btn:
     if not source:
         st.error("Please enter a YouTube URL or upload a file.")
@@ -554,64 +579,78 @@ if run_btn:
         progress_ph = st.empty()
 
         try:
-            progress_ph.info("⚙️ Pipeline running on backend — see sidebar for live status…")
-
-            # The FastAPI backend runs the whole pipeline (audio -> transcript ->
-            # title -> summary -> extraction -> RAG indexing) in one request, so
-            # we can't get true per-step callbacks over plain HTTP. We still
-            # animate the same status bars: each step lights up "active" while
-            # we wait, then everything is marked "done" together once the
-            # backend's single JSON response comes back.
-            for _k, _icon2, _lbl2 in PIPELINE_STEPS:
-                st.session_state.pipeline_steps[_k] = "active"
-                if _k in step_slots:
-                    step_slots[_k].markdown(_step_html(_k, "active"), unsafe_allow_html=True)
-
+            # 1. Submit — returns instantly with a job_id
             youtube_url = source if input_mode == "YouTube URL" else None
             file_to_send = uploaded_file_obj if input_mode == "Upload file" else None
 
-            data = api_analyze(youtube_url=youtube_url, uploaded_file=file_to_send, language=language)
+            progress_ph.info("⚙️ Submitting to backend…")
+            job_id = api_submit(youtube_url=youtube_url, uploaded_file=file_to_send, language=language)
+            st.session_state.session_id = job_id
 
-            for _k, _icon2, _lbl2 in PIPELINE_STEPS:
-                st.session_state.pipeline_steps[_k] = "done"
-                if _k in step_slots:
-                    step_slots[_k].markdown(_step_html(_k, "done"), unsafe_allow_html=True)
+            # 2. Poll /status/{job_id} every 3s and update sidebar steps live
+            active_key = None
+            while True:
+                time.sleep(3)
+                status = api_poll_status(job_id)
+                state = status["state"]
+                step  = status["step"]
 
-            st.session_state.result = {
-                "title":         data["title"],
-                "transcript":    data["transcript"],
-                "summary":       data["summary"],
-                "action_items":  data["action_items"],
-                "key_decisions": data["key_decisions"],
-                "open_questions":data["open_questions"],
-            }
-            st.session_state.session_id = data["session_id"]
-            st.session_state.pipeline_done = True
-            progress_ph.success("✅ Analysis complete!")
-            time.sleep(0.8)
-            progress_ph.empty()
-            st.rerun()
+                # Map the backend's step label to a sidebar pipeline key
+                new_key = _STEP_LABEL_MAP.get(step)
+
+                # Mark previously active step as done when we move to the next
+                if active_key and new_key and new_key != active_key:
+                    st.session_state.pipeline_steps[active_key] = "done"
+                    if active_key in step_slots:
+                        step_slots[active_key].markdown(_step_html(active_key, "done"), unsafe_allow_html=True)
+
+                # Light up current step
+                if new_key and state == "running":
+                    st.session_state.pipeline_steps[new_key] = "active"
+                    if new_key in step_slots:
+                        step_slots[new_key].markdown(_step_html(new_key, "active"), unsafe_allow_html=True)
+                    active_key = new_key
+                    progress_ph.info(f"⚙️ {step}…")
+
+                if state == "done":
+                    # Mark all steps done
+                    for _k, _, _ in PIPELINE_STEPS:
+                        st.session_state.pipeline_steps[_k] = "done"
+                        if _k in step_slots:
+                            step_slots[_k].markdown(_step_html(_k, "done"), unsafe_allow_html=True)
+
+                    # Fetch full results
+                    data = api_get_session(job_id)
+                    st.session_state.result = {
+                        "title":          data["title"],
+                        "transcript":     data["transcript"],
+                        "summary":        data["summary"],
+                        "action_items":   data["action_items"],
+                        "key_decisions":  data["key_decisions"],
+                        "open_questions": data["open_questions"],
+                    }
+                    st.session_state.pipeline_done = True
+                    progress_ph.success("✅ Analysis complete!")
+                    time.sleep(0.8)
+                    progress_ph.empty()
+                    st.rerun()
+                    break
+
+                elif state == "failed":
+                    # Mark active step as failed / reset pending
+                    for _k, _, _ in PIPELINE_STEPS:
+                        if st.session_state.pipeline_steps.get(_k) == "active":
+                            st.session_state.pipeline_steps[_k] = "pending"
+                            if _k in step_slots:
+                                step_slots[_k].markdown(_step_html(_k, "pending"), unsafe_allow_html=True)
+                    progress_ph.error(f"❌ Pipeline failed: {status.get('error', 'Unknown error')}")
+                    break
 
         except BackendError as e:
-            for k in ["audio","transcript","title","summary","extract","rag"]:
-                if st.session_state.pipeline_steps.get(k) == "active":
-                    st.session_state.pipeline_steps[k] = "pending"
-                    if k in step_slots:
-                        step_slots[k].markdown(_step_html(k, "pending"), unsafe_allow_html=True)
             progress_ph.error(f"❌ Backend error: {e}")
         except requests.exceptions.RequestException as e:
-            for k in ["audio","transcript","title","summary","extract","rag"]:
-                if st.session_state.pipeline_steps.get(k) == "active":
-                    st.session_state.pipeline_steps[k] = "pending"
-                    if k in step_slots:
-                        step_slots[k].markdown(_step_html(k, "pending"), unsafe_allow_html=True)
             progress_ph.error(f"❌ Could not reach backend at {BACKEND_URL}: {e}")
         except Exception as e:
-            for k in ["audio","transcript","title","summary","extract","rag"]:
-                if st.session_state.pipeline_steps.get(k) == "active":
-                    st.session_state.pipeline_steps[k] = "pending"
-                    if k in step_slots:
-                        step_slots[k].markdown(_step_html(k, "pending"), unsafe_allow_html=True)
             progress_ph.error(f"❌ Error: {e}")
 
 # ── Results ───────────────────────────────────────────────────────────────────
