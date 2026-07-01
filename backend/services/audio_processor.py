@@ -36,7 +36,7 @@ _CLIENT_CHAIN = [
 
 # Common base options shared across all attempts
 _BASE_OPTS = {
-    "format": "bestaudio[ext=m4a]/bestaudio/best",
+    "format": "bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
@@ -122,6 +122,8 @@ def download_youtube_audio(url: str) -> str:
                     "blocked",
                     "This video is not available",
                     "Precondition check failed",
+                    "Requested format is not available",
+                    "format is not available",
                 ]
             )
             if not bot_blocked:
