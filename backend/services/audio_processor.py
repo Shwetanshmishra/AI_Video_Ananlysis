@@ -29,11 +29,10 @@ _CLIENT_CHAIN = [
 ]
 
 _BASE_OPTS = {
-    "format": "bestaudio/best[acodec!=none]/best[acodec!=none]/best",
+    "format":           "bestaudio/best",
     "noplaylist":       True,
     "quiet":            True,
     "no_warnings":      True,
-    "prefer_free_formats": True,
     "retries":          3,
     "fragment_retries": 3,
     "nocheckcertificate": True,

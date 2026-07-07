@@ -1,3 +1,9 @@
+import os
+
+# Workaround for newer protobuf runtime: prefer the pure-Python implementation
+# to avoid "Descriptors cannot be created directly" with some generated protos.
+os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

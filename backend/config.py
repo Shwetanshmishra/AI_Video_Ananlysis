@@ -1,8 +1,7 @@
 import os
-from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
+load_dotenv()
 
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")

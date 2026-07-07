@@ -1,0 +1,2 @@
+# No apt packages required on the frontend — all heavy processing
+# (ffmpeg, yt-dlp, Whisper) now runs in the FastAPI backend.

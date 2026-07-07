@@ -26,13 +26,16 @@ project/
 │   ├── utils/session_store.py  # in-memory session -> rag_chain map
 │   ├── requirements.txt
 │   ├── packages.txt            # ffmpeg, nodejs (system deps)
+│   ├── Dockerfile
 │   └── .env.example
 │
 ├── frontend/                  # Streamlit service — UI ONLY
 │   ├── app.py                  # same UI/CSS as before, calls backend via requests
 │   ├── requirements.txt        # streamlit + requests only (no ML deps!)
+│   ├── Dockerfile
 │   └── .env.example
-
+│
+└── docker-compose.yml
 ```
 
 ## What changed vs. the original monolith

@@ -22,7 +22,7 @@ faster-whisper==1.2.1
 ctranslate2==4.8.0
 onnxruntime==1.27.0
 
-yt-dlp
+yt-dlp==2026.6.9
 ffmpeg-python==0.2.0
 av==17.1.0
 pydub==0.25.1

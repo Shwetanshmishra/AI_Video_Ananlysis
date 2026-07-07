@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - backend/.env
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_downloads:/app/downloads
+      - backend_vectordb:/app/vector_db
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+
+volumes:
+  backend_uploads:
+  backend_downloads:
+  backend_vectordb:

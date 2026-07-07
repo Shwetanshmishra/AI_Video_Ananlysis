@@ -1,120 +1,117 @@
-# ===========================
+# ==================================================
 # Python
-# ===========================
+# ==================================================
 __pycache__/
 *.py[cod]
 *$py.class
 
 # Virtual Environments
-.venv/
 venv/
+videoenv/
+.venv/
 env/
-ENV/
-videoagent/
-studyaienv/
 
+# ==================================================
 # Environment Variables
+# ==================================================
 .env
 .env.*
 !.env.example
 
+backend/.env
+frontend/.env
+
+# ==================================================
 # IDE
+# ==================================================
 .vscode/
 .idea/
-*.swp
 
+# ==================================================
 # OS Files
+# ==================================================
 .DS_Store
 Thumbs.db
-desktop.ini
 
-# Python Build
-build/
-dist/
-*.egg-info/
-.eggs/
-
+# ==================================================
 # Logs
+# ==================================================
 *.log
 logs/
 
-# Pytest
+# ==================================================
+# Python Cache
+# ==================================================
 .pytest_cache/
-.coverage
-htmlcov/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 
-# Jupyter
-.ipynb_checkpoints/
+# ==================================================
+# Build
+# ==================================================
+build/
+dist/
+*.egg-info/
 
-# ===========================
+# ==================================================
 # Streamlit
-# ===========================
-.streamlit/secrets.toml
+# ==================================================
+.streamlit/
+frontend/.streamlit/secrets.toml
 
-# ===========================
-# AI Model Cache
-# ===========================
-cache/
+# ==================================================
+# ChromaDB / Vector DB
+# ==================================================
+backend/chroma_db/
+backend/vector_db/
+backend/db/
+
+# ==================================================
+# Temporary Audio/Video Files
+# ==================================================
+backend/uploads/
+backend/downloads/
+backend/chunks/
+backend/temp/
+backend/tmp/
+
+# ==================================================
+# AI Models / Cache
+# ==================================================
+backend/models/
+backend/cache/
+backend/.cache/
 .huggingface/
-.hf_cache/
 transformers_cache/
 
-# ===========================
-# ChromaDB / Vector DB
-# ===========================
-vector_db/
-vectordb/
-chroma/
-chromadb/
+# ==================================================
+# Jupyter
+# ==================================================
+.ipynb_checkpoints/
+
+# ==================================================
+# SQLite / DB
+# ==================================================
+*.db
+*.sqlite
 *.sqlite3
 
-# ===========================
-# Downloads & Generated Files
-# ===========================
-downloads/
-uploads/
-temp/
-tmp/
-output/
-outputs/
-generated/
-audio_chunks/
-transcripts/
+# ==================================================
+# Docker
+# ==================================================
+.dockerignore
 
-# Audio / Video
-*.wav
-*.mp3
-*.mp4
-*.mkv
-*.webm
-*.avi
+# ==================================================
+# Misc
+# ==================================================
+*.bak
+*.tmp
+*.swp
+*.DS_Store
 
-# Generated PDFs
-*.pdf
-
-# ===========================
-# FastAPI
-# ===========================
-backend/__pycache__/
-backend/.env
-
-# ===========================
-# Streamlit
-# ===========================
-frontend/.env
-
-# ===========================
-# Docker (optional)
-# ===========================
-docker-compose.override.yml
-
-# ===========================
-# Claude / AI Editor Files
-# ===========================
-.claude/
-.claude-code/
-.claude-cache/
-.cursor/
-.cursor-cache/
+# ==================================================
+# VSCode Testing
+# ==================================================
+.history/
